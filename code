@@ -1,0 +1,261 @@
+
+clear
+
+variable	dt equal 1e-7  
+variable 	targetPressure equal 500e3  
+variable 	sjk equal 1e7  
+
+
+variable	runtime equal 0.02		
+variable	dumptime equal 1e-4		
+variable	runstep equal ${runtime}/${dt}
+variable	dumpstep equal ${dumptime}/${dt}
+
+variable	t equal step*dt
+variable	printtime equal 1e-4	
+variable	printstep equal ${printtime}/${dt}
+
+
+atom_style	granular		
+boundary	f f f			
+units		si				
+communicate	single vel yes	
+newton		off				
+hard_particles  yes
+
+read_data data/particle_data.txt   
+shell	mkdir postload
+shell	mkdir postloadcsv
+
+neighbor   0.75e-3  bin
+neigh_modify    delay 0
+
+
+
+pair_style	gran model hertz tangential history cohesion sjkr2
+pair_coeff	* *		
+
+timestep	${dt}   
+
+fix	integrator all nve/sphere	
+
+
+
+
+fix	m1 all property/global youngsModulus peratomtype 65e9  65e9  65e9 
+fix	m2 all property/global poissonsRatio peratomtype 0.25 0.25  0.25
+fix            m3 all property/global coefficientRestitution peratomtypepair 3  0.87 0.87 0.87  0.87 0.87 0.87  0.87 0.87 0.87
+fix            m4 all property/global coefficientFriction peratomtypepair 3   0.775 0.9 0.0 0.9 0.0 0 0 0 0
+fix coh all property/global cohesionEnergyDensity peratomtypepair 3  ${sjk}  ${sjk} ${sjk}  ${sjk} ${sjk}  ${sjk} ${sjk}   ${sjk}   ${sjk}  
+
+
+
+variable	r_out equal 0.071
+variable 	r_in equal 0.05
+
+variable 	Area_out equal 3.1415926*${r_out}*${r_out}
+variable 	Area_in equal 3.1415926*${r_in}*${r_in}
+variable 	Area equal ${Area_out}-${Area_in}
+
+variable 	tol equal 1e-3  
+
+variable 	targetForce equal ${Area}*${targetPressure}  
+
+
+fix	up all mesh/surface/stress/servo file meshes/up.stl type 2 scale 0.001 stress on com 0.0 0.050  0.0 ctrlPV force axis 0.0 -1.0 0.0 target_val ${targetForce} vel_max 0.005 ratio 0.005 mode auto 
+fix	wall all mesh/surface/stress file meshes/wall.stl type 3 stress on
+fix	down all mesh/surface/stress file meshes/down.stl type 2 scale 0.001 stress on
+
+fix	geometry all wall/gran model hertz tangential history mesh n_meshes 3 meshes up wall down
+
+
+fix_modify up servo/integrate stop
+
+
+variable nowForce equal f_up[2]
+
+variable nowtorque_up_y equal f_up[5]
+variable nowtorque_down_y equal f_down[5]
+
+variable ff equal abs((v_targetForce-v_nowForce)/v_targetForce)
+
+
+fix_modify up servo/integrate start
+
+fix_modify up servo/target_val v_targetForce
+
+
+
+fix	forcelog all print ${printstep} "step,$t,${nowForce}" screen no file postloadcsv/forces_load.csv title "step,time,force_up"  
+
+group allparticles type 1 2 3 
+
+label loop
+
+run	2000 pre no post no every 2000 &
+"if '${ff} < ${tol}' then &
+	'print Reach the target pressure' &
+	'set group allparticles vx 0.0 vy 0.0 vz 0.0' &
+	'set group allparticles omegax 0.0 omegay 0.0 omegaz 0.0' &
+     'write_restart load.restart'  &
+   'jump SELF end_loop' &
+else &
+	'print Not within the tolerance range'" &
+  "jump SELF loop"
+
+label end_loop
+
+
+
+
+clear
+
+variable 	rotation_period equal      190
+variable 	targetPressure equal 500e3  
+variable 	sjk equal 1e7  
+
+ 
+
+variable	dt equal 1e-7  
+
+variable	runtime equal  20 	
+variable	dumptime equal 1e-3		
+variable	runstep equal round(${runtime}/${dt})
+variable	dumpstep equal round(${dumptime}/${dt})
+
+variable	t equal step*dt    
+variable	rt equal step*dt
+variable	timestep equal step     
+variable	printtime equal round(${runtime}/(${dt}*5e4))   
+variable	printstep equal round(${runtime}/(${dt}*2.5e4))   
+
+
+variable	natoms equal 4		
+
+
+variable	youngmodulus1 equal 65e9
+variable	youngmodulus2 equal 65e9
+
+
+variable	poission1 equal 0.25
+variable	poission2 equal 0.25
+
+
+variable	CoR11 equal 0.87
+variable	CoR12 equal 0.87
+variable	CoR21 equal 0.87
+variable	CoR22 equal 0.87
+
+
+variable	sf11 equal 0.6
+variable	sf12 equal 0.0
+variable	sf21 equal 0.0
+variable	sf22 equal 0.0
+
+
+
+atom_style	granular		
+boundary	f f f			
+units		si				
+communicate	single vel yes	
+newton		off				
+hard_particles yes
+
+read_restart load.restart   
+shell	mkdir postshear
+shell	mkdir postshearcsv
+
+neighbor   0.75e-3  bin
+neigh_modify    delay 0
+
+
+
+pair_style gran model hertz tangential history  cohesion sjkr2
+pair_coeff	* *		
+
+timestep	${dt}   
+
+fix	integrator all nve/sphere	
+
+
+
+fix	m1 all property/global youngsModulus peratomtype 65e9  65e9  65e9 
+fix	m2 all property/global poissonsRatio peratomtype 0.25 0.25  0.25
+fix            m3 all property/global coefficientRestitution peratomtypepair 3  0.87 0.87 0.87  0.87 0.87 0.87  0.87 0.87 0.87
+fix            m4 all property/global coefficientFriction peratomtypepair 3   0.775 0.9 0.0 0.9 0.0 0 0 0 0
+fix coh all property/global cohesionEnergyDensity peratomtypepair 3  ${sjk}  ${sjk} ${sjk}  ${sjk} ${sjk}  ${sjk} ${sjk}   ${sjk}   ${sjk}  
+
+
+
+variable	r_out equal 0.071
+variable 	r_in equal 0.05
+
+variable 	Area_out equal 3.1415926*${r_out}*${r_out}
+variable 	Area_in equal 3.1415926*${r_in}*${r_in}
+variable 	Area equal ${Area_out}-${Area_in}
+
+
+variable 	tol equal 1e-3 
+
+variable 	targetForce equal ${Area}*${targetPressure}  
+
+
+fix	up all mesh/surface/stress/servo file meshes/up4.stl type 2  scale 0.001 stress on com 0.0 0.050 0.0 ctrlPV force axis 0.0 -1.0 0.0 target_val ${targetForce} vel_max 0.005 ratio 0.005 mode auto
+fix	wall all mesh/surface/stress file meshes/wall.stl type 3 stress on
+fix	down all mesh/surface/stress file meshes/down4.stl type 2  scale 0.001 stress on
+
+fix	geometry all wall/gran model hertz tangential history mesh n_meshes 3 meshes up wall down
+
+
+fix_modify up servo/integrate stop
+
+
+variable nowForce equal f_up[2]
+
+variable nowtorque_up_y equal f_up[5]
+variable nowtorque_down_y equal f_down[5]
+
+variable ff equal abs((v_targetForce-v_nowForce)/v_targetForce)
+
+
+velocity all set 0.0 0.0 0.0
+fix_modify up servo/integrate start
+
+fix_modify up servo/target_val v_targetForce
+
+
+variable shear_stress_up equal 3*v_nowtorque_up_y/(2*3.14*(v_r_out*v_r_out*v_r_out-v_r_in*v_r_in*v_r_in))  
+
+
+variable abs_shear_stress_up equal    1.25*v_shear_stress_up/${targetPressure}
+
+
+fix	displacement_stress all print ${printstep} "$t, ${abs_shear_stress_up}" screen no file postshearcsv/displacement_stress.csv title "time，shear_stress_down"
+
+
+compute allcontact all contact/atom/gran
+compute total_contacts all reduce sum c_allcontact
+variable N equal atoms
+variable avg_cnum equal  c_total_contacts/${N}
+
+
+compute ke_atom all ke/atom
+compute ke_avg all reduce ave c_ke_atom
+variable avg_ke equal c_ke_avg
+
+
+fix	outputdata all print ${printstep} "$t, ${avg_cnum}, ${avg_ke} " screen no file postshearcsv/outputdata.csv title "time"
+
+
+fix	movecad all move/mesh mesh down rotate origin 0.0 0.0 0.0 axis 0.0 1.0 0.0  period ${rotation_period}
+
+
+run	${runstep}
+write_restart shear.restart
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
